@@ -3,15 +3,12 @@ import json
 import openai
 import os
 from datetime import datetime
-from typing import TYPE_CHECKING
 
 openai.api_deep_research = os.getenv("DEEP_RESEARCH_API_URL")
 
 
 class BusinessSchoolPlatform:
     def __init__(self):
-        
-     if TYPE_CHECKING:
         # Lazy import agents to break circular dependency
         from .cto import CTOAgent
         from .cmo import CMOAgent
@@ -160,67 +157,343 @@ class BusinessSchoolPlatform:
             return "❌ Please enter a valid number!"
 
     # Chat functions for each agent - Fixed for Gradio ChatInterface compatibility
-    def chat_with_cto(self, message, history):
-        """Interactive chat with CTO agent"""
+    def chat_with_cto(self, message: str, history: list) -> str:
+        """Handle CTO chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.cto_agent.chat(message, history)
-        self.chat_histories['cto'] = updated_history
-        return response
+        # Initialiser le contexte si nécessaire
+        if not hasattr(self.cto_agent, 'context_data'):
+            self.cto_agent.context_data = {}
+            
+        # Charger les données de recherche si manquantes
+        if 'research_data' not in self.cto_agent.context_data:
+            research_context = {
+                "business": self.selected_idea.get('name', 'Startup'),
+                "description": self.selected_idea.get('description', ''),
+                "target_market": self.selected_idea.get('target_customers', '')
+            }
+            
+            # Simuler get_deep_research_data sans modifier l'agent
+            tech_research = {
+                "software_engineer": {
+                    "market_data": "Current tech talent market analysis...",
+                    "salary_ranges": "$80k-$150k"
+                }
+            }
+            
+            # Mettre à jour le contexte sans modifier la classe de l'agent
+            self.cto_agent.context_data = {
+                **getattr(self.cto_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": tech_research
+            }
 
-    def chat_with_cmo(self, message, history):
-        """Interactive chat with CMO agent"""
-        if not self.selected_idea:
-            return "❌ Please select a business idea first!"
+        # Gérer l'historique de chat
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        # Appeler la méthode chat de l'agent
+        response = self.cto_agent.get_response(
+            message,
+            context=str(self.cto_agent.context_data)
+        )
         
-        response, updated_history = self.cmo_agent.chat(message, history)
-        self.chat_histories['cmo'] = updated_history
+        # Mettre à jour l'historique
+        self.chat_histories['cto'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+        
         return response
 
-    def chat_with_cfo(self, message, history):
-        """Interactive chat with CFO agent"""
+    def chat_with_cmo(self, message: str, history: list) -> str:
+        """Handle CMO chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.cfo_agent.chat(message, history)
-        self.chat_histories['cfo'] = updated_history
+        # Initialiser le contexte si nécessaire
+        if not hasattr(self.cmo_agent, 'context_data'):
+            self.cmo_agent.context_data = {}
+        
+        # Charger les données de recherche si manquantes
+        if 'research_data' not in self.cmo_agent.context_data:
+            research_context = {
+                "business": self.selected_idea.get('name', 'Startup'),
+                "description": self.selected_idea.get('description', ''),
+                "target_market": self.selected_idea.get('target_customers', '')
+            }
+        
+            # Simuler get_deep_research_data pour le marketing
+            marketing_research = {
+                "digital_marketing": {
+                    "market_data": "Current digital marketing trends...",
+                    "salary_ranges": "$60k-$120k"
+                }
+            }
+        
+            # Mettre à jour le contexte
+            self.cmo_agent.context_data = {
+                **getattr(self.cmo_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": marketing_research
+            }
+
+        # Convertir l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        # Obtenir la réponse
+        response = self.cmo_agent.get_response(
+            message,
+            context=str(self.cmo_agent.context_data)
+        )
+    
+        # Mettre à jour l'historique
+        self.chat_histories['cmo'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+    
         return response
 
-    def chat_with_legal(self, message, history):
-        """Interactive chat with Legal agent"""
+    def chat_with_cfo(self, message: str, history: list) -> str:
+        """Handle CFO chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.legal_agent.chat(message, history)
-        self.chat_histories['legal'] = updated_history
+        # Initialiser le contexte
+        if not hasattr(self.cfo_agent, 'context_data'):
+            self.cfo_agent.context_data = {}
+        
+        # Charger les données financières si manquantes
+        if 'research_data' not in self.cfo_agent.context_data:
+            research_context = {
+                "business": self.selected_idea.get('name', 'Startup'),
+                "revenue_model": self.selected_idea.get('revenue_model', ''),
+            "capital": self.selected_idea.get('capital_required', '')
+            }
+        
+            financial_research = {
+                "financial_analyst": {
+                    "market_data": "Current financial job market...",
+                    "salary_ranges": "$70k-$140k"
+                }
+            }
+        
+            self.cfo_agent.context_data = {
+                **getattr(self.cfo_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": financial_research
+            }
+
+        # Gérer l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        response = self.cfo_agent.get_response(
+            message,
+            context=str(self.cfo_agent.context_data)
+        )
+    
+        self.chat_histories['cfo'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+    
         return response
 
-    def chat_with_hr(self, message, history):
-        """Interactive chat with HR agent"""
+    def chat_with_legal(self, message: str, history: list) -> str:
+        """Handle Legal chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.hr_agent.chat(message, history)
-        self.chat_histories['hr'] = updated_history
+        # Initialiser le contexte
+        if not hasattr(self.legal_agent, 'context_data'):
+            self.legal_agent.context_data = {}
+        
+        # Charger les données juridiques si manquantes
+        if 'research_data' not in self.legal_agent.context_data:
+            legal_research = {
+                "legal_counsel": {
+                    "market_data": "Current legal services market...",
+                    "service_costs": "$150-$400/hour"
+                }
+            }
+        
+            self.legal_agent.context_data = {
+                **getattr(self.legal_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": legal_research
+            }
+
+        # Gérer l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        response = self.legal_agent.get_response(
+            message,
+            context=str(self.legal_agent.context_data)
+        )
+    
+        self.chat_histories['legal'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+    
         return response
 
-    def chat_with_sales(self, message, history):
-        """Interactive chat with Sales agent"""
+    def chat_with_hr(self, message: str, history: list) -> str:
+        """Handle HR chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.sales_agent.chat(message, history)
-        self.chat_histories['sales'] = updated_history
+        # Initialiser le contexte
+        if not hasattr(self.hr_agent, 'context_data'):
+            self.hr_agent.context_data = {}
+        
+        # Charger les données RH si manquantes
+        if 'research_data' not in self.hr_agent.context_data:
+            hr_research = {
+                "hr_manager": {
+                    "market_data": "Current HR job market...",
+                    "salary_ranges": "$60k-$110k"
+                }
+            }
+        
+            self.hr_agent.context_data = {
+                **getattr(self.hr_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": hr_research
+            }
+
+        # Gérer l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        response = self.hr_agent.get_response(
+            message,
+            context=str(self.hr_agent.context_data)
+        )
+    
+        self.chat_histories['hr'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+    
         return response
 
-    def chat_with_market_research(self, message, history):
-        """Interactive chat with Market Research agent"""
+    def chat_with_sales(self, message: str, history: list) -> str:
+        """Handle Sales chat interactions"""
         if not self.selected_idea:
             return "❌ Please select a business idea first!"
 
-        response, updated_history = self.market_agent.chat(message, history)
-        self.chat_histories['market'] = updated_history
+        # Initialiser le contexte
+        if not hasattr(self.sales_agent, 'context_data'):
+            self.sales_agent.context_data = {}
+        
+        # Charger les données commerciales si manquantes
+        if 'research_data' not in self.sales_agent.context_data:
+            sales_research = {
+                "sales_manager": {
+                    "market_data": "Current sales job market...",
+                    "salary_ranges": "$50k-$120k + commission"
+                }
+            }
+        
+            self.sales_agent.context_data = {
+                **getattr(self.sales_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": sales_research
+            }
+
+        # Gérer l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        response = self.sales_agent.get_response(
+            message,
+            context=str(self.sales_agent.context_data)
+        )
+    
+        self.chat_histories['sales'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
+    
+        return response
+
+    def chat_with_market_research(self, message: str, history: list) -> str:
+        """Handle Market Research chat interactions"""
+        if not self.selected_idea:
+            return "❌ Please select a business idea first!"
+
+        # Initialiser le contexte
+        if not hasattr(self.market_agent, 'context_data'):
+            self.market_agent.context_data = {}
+        
+        # Charger les données de marché si manquantes
+        if 'research_data' not in self.market_agent.context_data:
+            market_research = {
+                "market_analyst": {
+                    "market_data": "Current market research trends...",
+                    "salary_ranges": "$65k-$130k"
+                }
+            }
+        
+            self.market_agent.context_data = {
+                **getattr(self.market_agent, 'context_data', {}),
+                "business_idea": self.selected_idea,
+                "research_data": market_research
+            }
+
+        # Gérer l'historique
+        internal_history = []
+        for msg_pair in history:
+            if len(msg_pair) >= 2:
+                internal_history.extend([
+                    {"role": "user", "content": msg_pair[0]},
+                    {"role": "assistant", "content": msg_pair[1]}
+                ])
+
+        response = self.market_agent.get_response(
+            message,
+            context=str(self.market_agent.context_data)
+        )
+        self.chat_histories['market'] = internal_history + [
+            {"role": "user", "content": message},
+            {"role": "assistant", "content": response}
+        ]
         return response
 
     def generate_business_plan(self):
@@ -356,5 +629,6 @@ class BusinessSchoolPlatform:
     **💬 Interactive Advantage:**
     Your business plan is now backed by real-time market intelligence AND interactive expert consultation, giving you a significant competitive advantage in planning, fundraising, and execution through dynamic, evolving strategic discussions.
     """
+
 # Initialize the platform
 platform = BusinessSchoolPlatform()

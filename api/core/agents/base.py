@@ -1,14 +1,8 @@
-import openai
+from openai import AzureOpenAI
 import requests
-from datetime import datetime
-from typing import Dict, List, Tuple
 import os
-
-openai.api_type = "azure"
-openai.api_key = os.getenv("OPENAI_API_KEY")
-openai.api_base = os.getenv("OPENAI_API_BASE")
-openai.api_deep_research = os.getenv("DEEP_RESEARCH_API_URL")
-
+from datetime import datetime
+from typing import Dict, List, Tuple, Optional
 
 class AIAgent:
     """Base class for all AI agents with Deep Research integration and chat capabilities"""
@@ -16,55 +10,78 @@ class AIAgent:
         self.name = name
         self.role = role
         self.expertise = expertise
-        self.model = "gpt-4.1"
-        self.deep_research_api = openai.api_deep_research
-        self.chat_history = []  # Store conversation history
-        self.context_data = {}  # Store business context and research data
+        
+        # Configure Azure OpenAI
+        self.api_type = "azure"
+        self.api_key = os.getenv("AZURE_OPENAI_API_KEY")
+        self.api_base = os.getenv("AZURE_OPENAI_ENDPOINT")
+        self.api_version = os.getenv("AZURE_OPENAI_API_VERSION")
+        self.deployment_name = os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        
+        # Configure Deep Research
+        self.deep_research_api = os.getenv("DEEP_RESEARCH_API_URL")
+        
+        # Initialize chat state
+        self.chat_history: List[Dict] = []
+        self.context_data: Dict = {}
 
-    def get_response(self, prompt: str, context: str = "", chat_history: List = None) -> str:
-        """Get enhanced response from Azure OpenAI GPT-4o with chat history"""
+        # Verify configuration
+        if not all([self.api_key, self.api_base, self.api_version, self.deployment_name]):
+            raise ValueError("Missing required Azure OpenAI configuration")
+
+    def _get_openai_client(self):
+        """Configure and return OpenAI client"""
+        return AzureOpenAI(
+            api_key=self.api_key,
+            api_version=self.api_version,
+            azure_endpoint=self.api_base  # Changed from base_url
+        )
+
+    def get_response(self, prompt: str, context: str = "", chat_history: Optional[List] = None) -> str:
+        """Get response from Azure OpenAI"""
         try:
-            # Build conversation history
+            client = self._get_openai_client()
+            
             messages = [
-                {"role": "system", "content": f"""You are {self.name}, a {self.role}. Your expertise is in {self.expertise}.
-
-                BUSINESS CONTEXT:
-                {context}
-
-                INSTRUCTIONS:
-                - Provide detailed, actionable advice based on your expertise
-                - Use current 2025 market insights and trends
-                - Be conversational and interactive - encourage follow-up questions
-                - Reference previous conversation points when relevant
-                - Challenge user assumptions when necessary to provide better guidance
-                - Ask clarifying questions to better understand their needs
-                - Provide specific examples and recommendations
-                - Consider startup constraints (budget, time, resources)
-                - When relevant, reference market research data to support recommendations
-                - Be encouraging but realistic about challenges
-                """}
+                {
+                    "role": "system",
+                    "content": f"""You are {self.name}, a {self.role}. Your expertise is in {self.expertise}.
+                    
+                    BUSINESS CONTEXT:
+                    {context}
+                    
+                    INSTRUCTIONS:
+                    - Provide detailed, actionable advice based on your expertise
+                    - Use current 2025 market insights and trends
+                    - Be conversational and interactive - encourage follow-up questions
+                    - Reference previous conversation points when relevant
+                    - Challenge user assumptions when necessary to provide better guidance
+                    - Ask clarifying questions to better understand their needs
+                    - Provide specific examples and recommendations
+                    - Consider startup constraints (budget, time, resources)
+                    - When relevant, reference market research data to support recommendations
+                    - Be encouraging but realistic about challenges
+                    """
+                }
             ]
 
-            # Add chat history if available
             if chat_history:
-                for msg in chat_history[-10:]:  # Keep last 10 messages for context
-                    messages.append(msg)
+                messages.extend(chat_history[-10:])  # Last 10 messages
 
-            # Add current user message
             messages.append({"role": "user", "content": prompt})
 
-            response = openai.ChatCompletion.create(
-                engine=self.model,
+            response = client.chat.completions.create(
+                model=self.deployment_name,
                 messages=messages,
                 max_tokens=2000,
                 temperature=0.7,
-                top_p=0.9,
-                frequency_penalty=0.1,
-                presence_penalty=0.1
+                top_p=0.9
             )
+            
             return response.choices[0].message.content
+            
         except Exception as e:
-            return f"🚨 **Error connecting to AI service:** {str(e)}\n\nPlease check your Azure OpenAI configuration and try again."
+            return f"🚨 Error connecting to AI service: {str(e)}"
 
     def get_deep_research_data(self, job_role: str, business_context: str) -> str:
         """Get market research data from company API"""

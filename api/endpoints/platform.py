@@ -17,7 +17,7 @@ async def set_user_profile(profile: UserProfile):
             budget=profile.budget,
             experience=profile.experience
         )
-        ideas = platform.generate_business_ideas()
+        ideas_response = platform.generate_business_ideas()
         return BusinessIdeaResponse(
             message=message,
             ideas=platform.generated_ideas
@@ -34,23 +34,27 @@ async def select_idea(idea_index: int):
     except Exception as e:
         raise HTTPException(400, str(e))
 
+# api/endpoints/platform.py
+
 @router.post("/chat/{agent_name}", response_model=ChatResponse)
 async def chat_with_agent(agent_name: str, request: ChatRequest):
-    """Chat with any agent"""
-    agent = getattr(platform, f"{agent_name}_agent", None)
-    if not agent:
-        raise HTTPException(404, f"Agent {agent_name} not found")
-    
-    response = await getattr(platform, f"chat_with_{agent_name}")(
-        message=request.message,
-        history=request.history or []
-    )
-    
-    return ChatResponse(
-        agent_name=agent_name,
-        response=response,
-        business_context=platform.selected_idea
-    )
+    try:
+        chat_method = getattr(platform, f"chat_with_{agent_name}", None)
+        if not chat_method:
+            raise HTTPException(404, detail=f"Agent {agent_name} not found")
+        
+        response = chat_method(
+            message=request.message,
+            history=request.history or []
+        )
+        
+        return ChatResponse(
+            agent_name=agent_name,
+            response=response,
+            business_context=platform.selected_idea or {}
+        )
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
 
 @router.get("/business_plan", response_model=BusinessPlanResponse)
 async def get_business_plan():
@@ -63,5 +67,10 @@ async def get_business_plan():
 
 @router.get("/export_data")
 async def export_data():
-    """Export all business data"""
-    return platform.export_business_data()
+    try:
+        if not platform.selected_idea:
+            raise HTTPException(400, detail="No business idea selected")
+        
+        return platform.export_business_data()
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
