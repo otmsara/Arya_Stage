@@ -3,6 +3,9 @@ import requests
 import os
 from datetime import datetime
 from typing import Dict, List, Tuple, Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class AIAgent:
     """Base class for all AI agents with Deep Research integration and chat capabilities"""
