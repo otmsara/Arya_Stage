@@ -11,7 +11,3 @@ router.include_router(
     tags=["Business Platform"]
 )
 
-# Health check
-@router.get("/health")
-async def health_check():
-    return {"status": "healthy"}
